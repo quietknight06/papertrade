@@ -1,0 +1,51 @@
+# JavaScript dependencies and generated builds
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+
+# Environment variables and credentials
+**/.env
+**/.env.*
+!**/.env.example
+**/.npmrc
+**/.pypirc
+**/*.pem
+**/*.key
+
+# Local application state
+backend/data/dev-store.json
+
+# Python environments, caches, and tooling output
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+
+# Downloaded market data and generated model artifacts
+ml/data/raw/*
+!ml/data/raw/.gitkeep
+ml/data/processed/*
+!ml/data/processed/.gitkeep
+ml/models/*
+!ml/models/.gitkeep
+
+# Test coverage, logs, and temporary files
+**/coverage/
+*.log
+*.tmp
+*.temp
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo

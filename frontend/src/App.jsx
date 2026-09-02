@@ -1,0 +1,50 @@
+import "./App.css";
+
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
+import { hasSession } from "./api.js";
+
+import Navbar from "./landing_page/Navbar.jsx";
+import Footer from "./landing_page/Footer.jsx";
+
+import HomePage from "./landing_page/home/HomePage.jsx";
+import Signup from "./landing_page/signup/Signup.jsx";
+import AboutPage from "./landing_page/about/AboutPage.jsx";
+import ProductsPage from "./landing_page/products/ProductsPage.jsx";
+import PricingPage from "./landing_page/pricing/PricingPage.jsx";
+import ContactPage from "./landing_page/support/SupportPage.jsx";
+import NotFound from "./landing_page/NotFound.jsx";
+import DashboardPage from "./dashboard/DashboardPage.jsx";
+
+function AppRoutes() {
+  const location = useLocation();
+  const dashboardRoute = location.pathname.startsWith("/dashboard");
+  return (
+    <>
+      {!dashboardRoute && <Navbar />}
+
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/products" element={<ProductsPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/support" element={<Navigate to="/contact" replace />} />
+        <Route path="/dashboard/*" element={hasSession() ? <DashboardPage /> : <Navigate to="/signup" replace />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+
+      {!dashboardRoute && <Footer />}
+    </>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
+}
+
+export default App;
