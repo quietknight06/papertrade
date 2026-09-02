@@ -1,10 +1,13 @@
+import os
 from pathlib import Path
 
 
-ML_ROOT = Path(__file__).resolve().parent.parent
-RAW_DATA_DIR = ML_ROOT / "data" / "raw"
-PROCESSED_DATA_DIR = ML_ROOT / "data" / "processed"
-MODEL_DIR = ML_ROOT / "models"
+ML_ROOT = Path(os.getenv("ML_ROOT", Path(__file__).resolve().parent.parent))
+RAW_DATA_DIR = Path(os.getenv("RAW_DATA_DIR", ML_ROOT / "data" / "raw"))
+PROCESSED_DATA_DIR = Path(
+    os.getenv("PROCESSED_DATA_DIR", ML_ROOT / "data" / "processed")
+)
+MODEL_DIR = Path(os.getenv("MODEL_DIR", ML_ROOT / "models"))
 
 # Keep this aligned with backend/index.js fallbackPrices.
 MODEL_TICKERS = ("AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA")

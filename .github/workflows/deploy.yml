@@ -1,0 +1,78 @@
+name: Deploy AWS application
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: papertrade-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ca-central-1
+  STACK_NAME: PaperTradeStack
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            collector/package-lock.json
+            frontend/package-lock.json
+            infra/package-lock.json
+
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install and verify JavaScript projects
+        shell: bash
+        run: |
+          npm ci
+          npm ci --prefix backend
+          npm ci --prefix collector
+          npm ci --prefix frontend
+          npm ci --prefix infra
+          npm test --prefix backend
+          npm run check --prefix collector
+          npm run lint --prefix frontend
+          npm run build --prefix infra
+
+      - name: Deploy CDK stack
+        working-directory: infra
+        run: npx cdk deploy --all --require-approval never -c modelVersion=${{ vars.MODEL_VERSION || 'current' }} -c enableSchedule=${{ vars.ENABLE_PREDICTION_SCHEDULE || 'false' }}
+
+      - name: Read deployment outputs
+        shell: bash
+        run: |
+          outputs="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs' --output json)"
+          echo "WEBSITE_BUCKET=$(jq -r '.[] | select(.OutputKey==\"WebsiteBucket\") | .OutputValue' <<<"$outputs")" >> "$GITHUB_ENV"
+          echo "DISTRIBUTION_ID=$(jq -r '.[] | select(.OutputKey==\"DistributionId\") | .OutputValue' <<<"$outputs")" >> "$GITHUB_ENV"
+          echo "VITE_COGNITO_USER_POOL_ID=$(jq -r '.[] | select(.OutputKey==\"UserPoolId\") | .OutputValue' <<<"$outputs")" >> "$GITHUB_ENV"
+          echo "VITE_COGNITO_CLIENT_ID=$(jq -r '.[] | select(.OutputKey==\"UserPoolClientId\") | .OutputValue' <<<"$outputs")" >> "$GITHUB_ENV"
+          echo "VITE_AWS_REGION=$AWS_REGION" >> "$GITHUB_ENV"
+
+      - name: Build production frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload static website
+        shell: bash
+        run: |
+          aws s3 sync frontend/dist "s3://$WEBSITE_BUCKET" --delete --exclude index.html --exclude 'predictions/*' --cache-control 'public,max-age=31536000,immutable'
+          aws s3 cp frontend/dist/index.html "s3://$WEBSITE_BUCKET/index.html" --content-type text/html --cache-control no-cache
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths /index.html

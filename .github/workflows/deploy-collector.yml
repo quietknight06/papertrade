@@ -1,0 +1,35 @@
+name: Deploy Lightsail collector
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          COLLECTOR_SSH_KEY: ${{ secrets.COLLECTOR_SSH_KEY }}
+          COLLECTOR_HOST: ${{ secrets.COLLECTOR_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$COLLECTOR_SSH_KEY" > ~/.ssh/papertrade
+          chmod 600 ~/.ssh/papertrade
+          ssh-keyscan -H "$COLLECTOR_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload and restart collector
+        shell: bash
+        env:
+          COLLECTOR_HOST: ${{ secrets.COLLECTOR_HOST }}
+          COLLECTOR_USER: ${{ secrets.COLLECTOR_USER }}
+        run: |
+          tar -czf /tmp/papertrade-collector.tgz collector package.json 2>/dev/null || tar -czf /tmp/papertrade-collector.tgz collector
+          scp -i ~/.ssh/papertrade /tmp/papertrade-collector.tgz "$COLLECTOR_USER@$COLLECTOR_HOST:/tmp/papertrade-collector.tgz"
+          ssh -i ~/.ssh/papertrade "$COLLECTOR_USER@$COLLECTOR_HOST" 'sudo /usr/local/sbin/deploy-papertrade-collector /tmp/papertrade-collector.tgz'

@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { apiRequest, storeSession } from "../../api";
+import { useAuth } from "../../auth";
+import { apiRequest } from "../../api";
 
 function Signup() {
+  const auth = useAuth();
   const [mode, setMode] = useState("signup");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [confirmationCode, setConfirmationCode] = useState("");
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -19,15 +23,30 @@ function Signup() {
     setError("");
     setSubmitting(true);
     try {
-      const session = await apiRequest(
-        mode === "signup" ? "/signup" : "/login",
-        {
+      if (awaitingConfirmation) {
+        await auth.confirmSignUp(form.email, confirmationCode);
+        setAwaitingConfirmation(false);
+        setMode("login");
+        setError("Email confirmed. Sign in to continue.");
+      } else if (mode === "signup") {
+        const result = await auth.signUp(form);
+        if (result.isSignUpComplete) {
+          setMode("login");
+        } else {
+          setAwaitingConfirmation(true);
+        }
+      } else {
+        const result = await auth.signIn(form.email, form.password);
+        if (!result.isSignedIn) throw new Error(`Additional sign-in step required: ${result.nextStep?.signInStep || "unknown"}`);
+        await apiRequest("/profile", {
           method: "POST",
-          body: JSON.stringify(form),
-        },
-      );
-      storeSession(session);
-      window.location.replace("/dashboard");
+          body: JSON.stringify({
+            name: result.user?.name || form.name || form.email.split("@")[0],
+            email: result.user?.email || form.email,
+          }),
+        });
+        window.location.replace("/dashboard");
+      }
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -60,7 +79,7 @@ function Signup() {
             className="d-grid gap-3"
             aria-label={mode === "signup" ? "Create account" : "Sign in"}
           >
-            {mode === "signup" && (
+            {mode === "signup" && !awaitingConfirmation && (
               <label>
                 <span className="form-label">Full name</span>
                 <input
@@ -73,7 +92,7 @@ function Signup() {
                 />
               </label>
             )}
-            <label>
+            {!awaitingConfirmation && <label>
               <span className="form-label">Email</span>
               <input
                 className="form-control"
@@ -83,8 +102,8 @@ function Signup() {
                 onChange={updateField}
                 required
               />
-            </label>
-            <label>
+            </label>}
+            {!awaitingConfirmation && <label>
               <span className="form-label">Password</span>
               <input
                 className="form-control"
@@ -95,7 +114,20 @@ function Signup() {
                 minLength="8"
                 required
               />
-            </label>
+            </label>}
+            {awaitingConfirmation && (
+              <label>
+                <span className="form-label">Email confirmation code</span>
+                <input
+                  className="form-control"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={confirmationCode}
+                  onChange={(event) => setConfirmationCode(event.target.value)}
+                  required
+                />
+              </label>
+            )}
             {error && (
               <div className="alert alert-danger mb-0" role="alert">
                 {error}
@@ -108,7 +140,9 @@ function Signup() {
             >
               {submitting
                 ? "Please wait…"
-                : mode === "signup"
+                : awaitingConfirmation
+                  ? "Confirm email"
+                  : mode === "signup"
                   ? "Create account"
                   : "Sign in"}
             </button>
@@ -116,12 +150,15 @@ function Signup() {
           <button
             className="btn btn-link px-0 mt-3"
             type="button"
+            disabled={awaitingConfirmation}
             onClick={() => {
               setMode((current) => (current === "signup" ? "login" : "signup"));
               setError("");
             }}
           >
-            {mode === "signup"
+            {awaitingConfirmation
+              ? "Check your email for a confirmation code"
+              : mode === "signup"
               ? "Already have an account? Sign in"
               : "Need an account? Sign up"}
           </button>

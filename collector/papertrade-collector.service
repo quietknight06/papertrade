@@ -1,0 +1,19 @@
+[Unit]
+Description=PaperTrade Alpaca market-data collector
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=papertrade
+Group=papertrade
+WorkingDirectory=/opt/papertrade/collector
+EnvironmentFile=/etc/papertrade/collector.env
+ExecStart=/usr/bin/node /opt/papertrade/collector/index.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

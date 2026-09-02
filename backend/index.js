@@ -12,7 +12,6 @@ const mongoose = require("mongoose");
 const dns = require("node:dns");
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
-const bodyParser = require("body-parser");
 const cors = require("cors");
 
 const { HoldingsModel } = require("./model/HoldingsModel");
@@ -538,7 +537,7 @@ app.use(
       : true,
   }),
 );
-app.use(bodyParser.json());
+app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", (req, res) => {
   res.json({

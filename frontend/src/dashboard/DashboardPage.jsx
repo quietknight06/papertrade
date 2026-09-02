@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
-import { apiRequest, clearSession, getStoredUser } from "../api";
+import { apiRequest, clearSession } from "../api";
+import { useAuth } from "../auth";
 import "./dashboard.css";
 
 const fallbackWatchlist = [
@@ -190,9 +191,13 @@ function ExperimentalForecasts() {
 
   useEffect(() => {
     let active = true;
-    apiRequest(`/predictions/${ticker}`)
+    fetch("/predictions/latest.json", { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Forecasts are temporarily unavailable");
+        return response.json();
+      })
       .then((result) => {
-        if (active) setForecast(result);
+        if (active) setForecast(result.predictions?.[ticker] || null);
       })
       .catch((requestError) => {
         if (active) {
@@ -899,6 +904,7 @@ function OrderDialog({ draft, onClose, onPlaced }) {
 }
 
 export default function DashboardPage() {
+  const auth = useAuth();
   const navigate = useNavigate();
   const portfolioSymbols = usePortfolioWatchlistSymbols();
   const [searchSymbols, setSearchSymbols] = useState([]);
@@ -915,11 +921,12 @@ export default function DashboardPage() {
   const watchlist = useLiveWatchlist(quoteSymbols);
   const [draft, setDraft] = useState(null);
   const [ordersVersion, setOrdersVersion] = useState(0);
-  const user = getStoredUser() || {
+  const user = auth.user || {
     name: "Demo User",
     email: "demo@papertrade.local",
   };
-  const logout = () => {
+  const logout = async () => {
+    await auth.signOut();
     clearSession();
     navigate("/signup");
   };

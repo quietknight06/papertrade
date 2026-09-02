@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+archive="${1:-/tmp/papertrade-collector.tgz}"
+test -f "$archive"
+install -d -o papertrade -g papertrade /opt/papertrade
+tar -xzf "$archive" -C /opt/papertrade
+chown -R papertrade:papertrade /opt/papertrade/collector
+sudo -u papertrade npm ci --omit=dev --prefix /opt/papertrade/collector
+install -m 0644 /opt/papertrade/collector/papertrade-collector.service /etc/systemd/system/papertrade-collector.service
+systemctl daemon-reload
+systemctl enable --now papertrade-collector
+systemctl restart papertrade-collector
+systemctl --no-pager --full status papertrade-collector
