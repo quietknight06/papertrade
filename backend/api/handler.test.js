@@ -12,6 +12,22 @@ test("keys use the Cognito subject", () => {
   assert.deepEqual(_test.holdingKey("subject", "AAPL"), { PK: "USER#subject", SK: "HOLDING#AAPL" });
 });
 
+test("asset search ranks an exact ticker above name substring matches", () => {
+  const query = "META";
+  const assets = [
+    { symbol: "DBP", name: "Invesco DB Precious Metals Fund" },
+    { symbol: "METG", name: "Leverage Shares 2X Long META Daily ETF" },
+    { symbol: "META", name: "Meta Platforms, Inc." },
+  ];
+  assets.sort((left, right) => _test.assetSearchRank(left, query) - _test.assetSearchRank(right, query));
+  assert.equal(assets[0].symbol, "META");
+});
+
+test("firstFiniteNumber ignores missing, invalid, zero, and negative values", () => {
+  assert.equal(_test.firstFiniteNumber(undefined, NaN, 0, -1, 123.45), 123.45);
+  assert.equal(_test.firstFiniteNumber(undefined, null), undefined);
+});
+
 test("health is public and all other routes require a JWT subject", async () => {
   const health = await handler({ rawPath: "/api/health", requestContext: { http: { method: "GET" } } });
   assert.equal(health.statusCode, 200);

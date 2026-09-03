@@ -2,6 +2,7 @@ const {
   BatchGetCommand,
   DynamoDBDocumentClient,
   GetCommand,
+  PutCommand,
   QueryCommand,
   TransactWriteCommand,
   UpdateCommand,
@@ -141,6 +142,64 @@ async function getAlpacaCredentials() {
   return cachedAlpacaCredentials;
 }
 
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number) && number > 0) return number;
+  }
+  return undefined;
+}
+
+function assetSearchRank(asset, query) {
+  const symbol = String(asset.symbol || "").toUpperCase();
+  const name = String(asset.name || "").toUpperCase();
+  if (symbol === query) return 0;
+  if (symbol.startsWith(query)) return 1;
+  if (name.startsWith(query)) return 2;
+  if (symbol.includes(query)) return 3;
+  if (name.includes(query)) return 4;
+  return 5;
+}
+
+async function alpacaSnapshots(symbols) {
+  if (!symbols.length) return new Map();
+  const credentials = await getAlpacaCredentials();
+  const baseUrl = String(credentials.dataBaseUrl || "https://data.alpaca.markets").replace(/\/$/, "");
+  const url = new URL(`${baseUrl}/v2/stocks/snapshots`);
+  url.searchParams.set("symbols", symbols.join(","));
+  url.searchParams.set("feed", "iex");
+  const request = await fetch(url, {
+    headers: { "APCA-API-KEY-ID": credentials.key, "APCA-API-SECRET-KEY": credentials.secret },
+  });
+  if (!request.ok) throw new Error(`Alpaca snapshot request returned ${request.status}`);
+  const payload = await request.json();
+  const snapshots = payload.snapshots || payload;
+  const results = new Map();
+  const updatedAt = new Date().toISOString();
+  const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
+  for (const symbol of symbols) {
+    const snapshot = snapshots[symbol];
+    if (!snapshot) continue;
+    const price = firstFiniteNumber(snapshot.latestTrade?.p, snapshot.minuteBar?.c, snapshot.dailyBar?.c);
+    if (!price) continue;
+    results.set(symbol, {
+      PK: "MARKET",
+      SK: `QUOTE#${symbol}`,
+      entityType: "QUOTE",
+      symbol,
+      name: symbol,
+      exchange: "US",
+      price,
+      bid: firstFiniteNumber(snapshot.latestQuote?.bp, price),
+      ask: firstFiniteNumber(snapshot.latestQuote?.ap, price),
+      previousClose: firstFiniteNumber(snapshot.prevDailyBar?.c, price),
+      updatedAt,
+      expiresAt,
+    });
+  }
+  return results;
+}
+
 async function alpacaAssets() {
   if (cachedAssets.expiresAt > Date.now()) return cachedAssets.values;
   const credentials = await getAlpacaCredentials();
@@ -235,16 +294,34 @@ async function routeRequest(event) {
     const requested = String(event.queryStringParameters?.symbols || "").split(",").map((value) => value.trim().toUpperCase()).filter((value) => /^[A-Z.]{1,10}$/.test(value)).slice(0, 50);
     const symbols = requested.length ? requested : defaultSymbols;
     const quotes = await quoteItems(symbols);
+    const now = Date.now();
+    const staleSymbols = symbols.filter((symbol) => {
+      const updatedAt = Date.parse(quotes.get(symbol)?.updatedAt || "");
+      return !Number.isFinite(updatedAt) || now - updatedAt > 15000;
+    });
+    if (staleSymbols.length) {
+      try {
+        const snapshots = await alpacaSnapshots(staleSymbols);
+        await Promise.allSettled([...snapshots.values()].map((quote) => documentClient.send(new PutCommand({
+          TableName: tableName,
+          Item: quote,
+        }))));
+        for (const [symbol, quote] of snapshots) quotes.set(symbol, quote);
+      } catch (error) {
+        console.error(JSON.stringify({ message: "Unable to refresh Alpaca snapshots", cause: error.message }));
+      }
+    }
     return response(200, symbols.map((symbol) => {
       const quote = quotes.get(symbol) || {};
+      const price = Number(quote.price ?? fallbackPrices[symbol]);
       return {
         symbol,
         name: quote.name || symbol,
         exchange: quote.exchange || "US",
-        price: Number(quote.price ?? fallbackPrices[symbol]),
-        bid: Number(quote.bid ?? quote.price ?? fallbackPrices[symbol]),
-        ask: Number(quote.ask ?? quote.price ?? fallbackPrices[symbol]),
-        previousClose: Number(quote.previousClose ?? fallbackPrices[symbol]),
+        price: Number.isFinite(price) ? price : null,
+        bid: firstFiniteNumber(quote.bid, price) ?? null,
+        ask: firstFiniteNumber(quote.ask, price) ?? null,
+        previousClose: firstFiniteNumber(quote.previousClose, price) ?? null,
         source: quote.updatedAt ? "alpaca" : "fallback",
         updatedAt: quote.updatedAt || null,
       };
@@ -254,7 +331,10 @@ async function routeRequest(event) {
     const query = String(event.queryStringParameters?.query || "").trim().toUpperCase();
     const limit = Math.min(Math.max(Number(event.queryStringParameters?.limit) || 20, 1), 50);
     if (!query) return response(200, []);
-    const matches = (await alpacaAssets()).filter((asset) => asset.symbol.includes(query) || asset.name.toUpperCase().includes(query)).slice(0, limit);
+    const matches = (await alpacaAssets())
+      .filter((asset) => asset.symbol.includes(query) || asset.name.toUpperCase().includes(query))
+      .sort((left, right) => assetSearchRank(left, query) - assetSearchRank(right, query) || left.symbol.localeCompare(right.symbol))
+      .slice(0, limit);
     return response(200, matches);
   }
   if (method === "POST" && path === "/api/newOrder") {
@@ -299,4 +379,4 @@ exports.handler = async (event) => {
   }
 };
 
-exports._test = { centsToMoney, moneyToCents, profileKey, holdingKey };
+exports._test = { assetSearchRank, centsToMoney, firstFiniteNumber, moneyToCents, profileKey, holdingKey };

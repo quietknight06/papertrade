@@ -13,8 +13,10 @@
 **/*.pem
 **/*.key
 
-# Local application state
+# Local application state and deployment output
 backend/data/dev-store.json
+/papertrade-collector.tgz
+/prediction-result.json
 
 # Python environments, caches, and tooling output
 **/.venv/
@@ -49,3 +51,6 @@ Thumbs.db
 Desktop.ini
 *.swp
 *.swo
+
+# Legacy dashboard
+/dashboard/
