@@ -25,7 +25,7 @@ export class PaperTradeStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       timeToLiveAttribute: "expiresAt",
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
     table.addGlobalSecondaryIndex({
       indexName: "OpenOrders",
@@ -66,7 +66,7 @@ export class PaperTradeStack extends cdk.Stack {
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
       deletionProtection: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
     const userPoolClient = userPool.addClient("BrowserClient", {
       userPoolClientName: "papertrade-browser",
@@ -83,7 +83,7 @@ export class PaperTradeStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
       lifecycleRules: [{ noncurrentVersionExpiration: cdk.Duration.days(30) }],
     });
     const artifactBucket = new s3.Bucket(this, "ArtifactBucket", {
@@ -91,7 +91,7 @@ export class PaperTradeStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
 
     const apiLogGroup = new logs.LogGroup(this, "ApiLogGroup", {
@@ -115,14 +115,23 @@ export class PaperTradeStack extends cdk.Stack {
         ORDER_QUEUE_URL: orderQueue.queueUrl,
         ALPACA_PARAMETER: "/papertrade/prod/alpaca-credentials",
       },
-      bundling: { minify: true, sourceMap: true, target: "node22", bundleAwsSDK: true },
+      bundling: {
+        minify: true,
+        sourceMap: true,
+        target: "node22",
+        bundleAwsSDK: true,
+      },
     });
     table.grantReadWriteData(apiFunction);
     orderQueue.grantSendMessages(apiFunction);
-    apiFunction.addToRolePolicy(new iam.PolicyStatement({
-      actions: ["ssm:GetParameter"],
-      resources: [`arn:${cdk.Aws.PARTITION}:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/papertrade/prod/alpaca-credentials`],
-    }));
+    apiFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:GetParameter"],
+        resources: [
+          `arn:${cdk.Aws.PARTITION}:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/papertrade/prod/alpaca-credentials`,
+        ],
+      }),
+    );
 
     const httpApi = new apigwv2.CfnApi(this, "HttpApi", {
       name: "papertrade-http-api",
@@ -175,7 +184,10 @@ export class PaperTradeStack extends cdk.Stack {
       sourceArn: `arn:${cdk.Aws.PARTITION}:execute-api:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:${httpApi.ref}/*`,
     });
 
-    const apiDomain = cdk.Fn.select(2, cdk.Fn.split("/", httpApi.attrApiEndpoint));
+    const apiDomain = cdk.Fn.select(
+      2,
+      cdk.Fn.split("/", httpApi.attrApiEndpoint),
+    );
     const s3Origin = origins.S3BucketOrigin.withOriginAccessControl(siteBucket);
     const spaRewrite = new cloudfront.Function(this, "SpaRewrite", {
       functionName: "papertrade-spa-rewrite",
@@ -195,31 +207,42 @@ export class PaperTradeStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
-        functionAssociations: [{
-          function: spaRewrite,
-          eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
-        }],
+        functionAssociations: [
+          {
+            function: spaRewrite,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          },
+        ],
       },
       additionalBehaviors: {
         "api/*": {
-          origin: new origins.HttpOrigin(apiDomain, { protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY }),
+          origin: new origins.HttpOrigin(apiDomain, {
+            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+          }),
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          originRequestPolicy:
+            cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
           compress: true,
         },
         "predictions/*": {
           origin: s3Origin,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: new cloudfront.CachePolicy(this, "PredictionCachePolicy", {
-            cachePolicyName: `papertrade-predictions-${this.account}`,
-            minTtl: cdk.Duration.seconds(0),
-            defaultTtl: cdk.Duration.minutes(5),
-            maxTtl: cdk.Duration.minutes(5),
-            enableAcceptEncodingBrotli: true,
-            enableAcceptEncodingGzip: true,
-          }),
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: new cloudfront.CachePolicy(
+            this,
+            "PredictionCachePolicy",
+            {
+              cachePolicyName: `papertrade-predictions-${this.account}`,
+              minTtl: cdk.Duration.seconds(0),
+              defaultTtl: cdk.Duration.minutes(5),
+              maxTtl: cdk.Duration.minutes(5),
+              enableAcceptEncodingBrotli: true,
+              enableAcceptEncodingGzip: true,
+            },
+          ),
           compress: true,
         },
       },
@@ -227,39 +250,50 @@ export class PaperTradeStack extends cdk.Stack {
     });
 
     const modelVersion = this.node.tryGetContext("modelVersion") || "current";
-    const scheduleEnabled = String(this.node.tryGetContext("enableSchedule") || "false") === "true";
+    const scheduleEnabled =
+      String(this.node.tryGetContext("enableSchedule") || "false") === "true";
     const predictionLogGroup = new logs.LogGroup(this, "PredictionLogGroup", {
       logGroupName: "/aws/lambda/papertrade-daily-predictions",
       retention: logs.RetentionDays.TWO_WEEKS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-    const predictionFunction = new lambda.DockerImageFunction(this, "PredictionFunction", {
-      functionName: "papertrade-daily-predictions",
-      code: lambda.DockerImageCode.fromImageAsset(path.join(__dirname, "../../ml"), { file: "lambda/Dockerfile" }),
-      architecture: lambda.Architecture.X86_64,
-      memorySize: 2048,
-      timeout: cdk.Duration.minutes(10),
-      ephemeralStorageSize: cdk.Size.gibibytes(1),
-      reservedConcurrentExecutions: 1,
-      logGroup: predictionLogGroup,
-      environment: {
-        SITE_BUCKET: siteBucket.bucketName,
-        PREDICTION_KEY: "predictions/latest.json",
-        ARTIFACT_BUCKET: artifactBucket.bucketName,
-        MODEL_VERSION: modelVersion,
-        MODEL_PREFIX: `models/${modelVersion}`,
-        TIINGO_PARAMETER: "/papertrade/prod/tiingo-api-key",
-        ML_ROOT: "/tmp/papertrade",
-        RAW_DATA_DIR: "/tmp/papertrade/data/raw",
-        MODEL_DIR: "/tmp/papertrade/models",
+    const predictionFunction = new lambda.DockerImageFunction(
+      this,
+      "PredictionFunction",
+      {
+        functionName: "papertrade-daily-predictions",
+        code: lambda.DockerImageCode.fromImageAsset(
+          path.join(__dirname, "../../ml"),
+          { file: "lambda/Dockerfile" },
+        ),
+        architecture: lambda.Architecture.X86_64,
+        memorySize: 2048,
+        timeout: cdk.Duration.minutes(10),
+        ephemeralStorageSize: cdk.Size.gibibytes(1),
+        logGroup: predictionLogGroup,
+        environment: {
+          SITE_BUCKET: siteBucket.bucketName,
+          PREDICTION_KEY: "predictions/latest.json",
+          ARTIFACT_BUCKET: artifactBucket.bucketName,
+          MODEL_VERSION: modelVersion,
+          MODEL_PREFIX: `models/${modelVersion}`,
+          TIINGO_PARAMETER: "/papertrade/prod/tiingo-api-key",
+          ML_ROOT: "/tmp/papertrade",
+          RAW_DATA_DIR: "/tmp/papertrade/data/raw",
+          MODEL_DIR: "/tmp/papertrade/models",
+        },
       },
-    });
+    );
     artifactBucket.grantRead(predictionFunction, `models/${modelVersion}/*`);
     siteBucket.grantReadWrite(predictionFunction, "predictions/*");
-    predictionFunction.addToRolePolicy(new iam.PolicyStatement({
-      actions: ["ssm:GetParameter"],
-      resources: [`arn:${cdk.Aws.PARTITION}:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/papertrade/prod/tiingo-api-key`],
-    }));
+    predictionFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:GetParameter"],
+        resources: [
+          `arn:${cdk.Aws.PARTITION}:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/papertrade/prod/tiingo-api-key`,
+        ],
+      }),
+    );
 
     const schedulerRole = new iam.Role(this, "SchedulerRole", {
       assumedBy: new iam.ServicePrincipal("scheduler.amazonaws.com"),
@@ -275,23 +309,38 @@ export class PaperTradeStack extends cdk.Stack {
       target: {
         arn: predictionFunction.functionArn,
         roleArn: schedulerRole.roleArn,
-        retryPolicy: { maximumEventAgeInSeconds: 7200, maximumRetryAttempts: 2 },
+        retryPolicy: {
+          maximumEventAgeInSeconds: 7200,
+          maximumRetryAttempts: 2,
+        },
       },
     });
 
-    const collectorUser = new iam.User(this, "CollectorUser", { userName: "papertrade-collector" });
+    const collectorUser = new iam.User(this, "CollectorUser", {
+      userName: "papertrade-collector",
+    });
     table.grantReadWriteData(collectorUser);
     orderQueue.grantConsumeMessages(collectorUser);
 
-    new cdk.CfnOutput(this, "CloudFrontUrl", { value: `https://${distribution.distributionDomainName}` });
-    new cdk.CfnOutput(this, "DistributionId", { value: distribution.distributionId });
+    new cdk.CfnOutput(this, "CloudFrontUrl", {
+      value: `https://${distribution.distributionDomainName}`,
+    });
+    new cdk.CfnOutput(this, "DistributionId", {
+      value: distribution.distributionId,
+    });
     new cdk.CfnOutput(this, "WebsiteBucket", { value: siteBucket.bucketName });
-    new cdk.CfnOutput(this, "ArtifactBucketName", { value: artifactBucket.bucketName });
+    new cdk.CfnOutput(this, "ArtifactBucketName", {
+      value: artifactBucket.bucketName,
+    });
     new cdk.CfnOutput(this, "ApiUrl", { value: httpApi.attrApiEndpoint });
     new cdk.CfnOutput(this, "UserPoolId", { value: userPool.userPoolId });
-    new cdk.CfnOutput(this, "UserPoolClientId", { value: userPoolClient.userPoolClientId });
+    new cdk.CfnOutput(this, "UserPoolClientId", {
+      value: userPoolClient.userPoolClientId,
+    });
     new cdk.CfnOutput(this, "TableName", { value: table.tableName });
     new cdk.CfnOutput(this, "OrderQueueUrl", { value: orderQueue.queueUrl });
-    new cdk.CfnOutput(this, "CollectorUserName", { value: collectorUser.userName });
+    new cdk.CfnOutput(this, "CollectorUserName", {
+      value: collectorUser.userName,
+    });
   }
 }
