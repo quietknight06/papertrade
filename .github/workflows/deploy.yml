@@ -59,12 +59,34 @@ jobs:
       - name: Read deployment outputs
         shell: bash
         run: |
-          outputs="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs' --output json)"
-          echo "WEBSITE_BUCKET=$(jq -r '.[] | select(.OutputKey==\"WebsiteBucket\") | .OutputValue' <<<"$outputs")" >> "$GITHUB_ENV"
-          echo "DISTRIBUTION_ID=$(jq -r '.[] | select(.OutputKey==\"DistributionId\") | .OutputValue' <<<"$outputs")" >> "$GITHUB_ENV"
-          echo "VITE_COGNITO_USER_POOL_ID=$(jq -r '.[] | select(.OutputKey==\"UserPoolId\") | .OutputValue' <<<"$outputs")" >> "$GITHUB_ENV"
-          echo "VITE_COGNITO_CLIENT_ID=$(jq -r '.[] | select(.OutputKey==\"UserPoolClientId\") | .OutputValue' <<<"$outputs")" >> "$GITHUB_ENV"
-          echo "VITE_AWS_REGION=$AWS_REGION" >> "$GITHUB_ENV"
+          outputs="$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query 'Stacks[0].Outputs' \
+            --output json)"
+
+          WEBSITE_BUCKET="$(jq -er \
+            '.[] | select(.OutputKey=="WebsiteBucket") | .OutputValue' \
+            <<<"$outputs")"
+
+          DISTRIBUTION_ID="$(jq -er \
+            '.[] | select(.OutputKey=="DistributionId") | .OutputValue' \
+            <<<"$outputs")"
+
+          VITE_COGNITO_USER_POOL_ID="$(jq -er \
+            '.[] | select(.OutputKey=="UserPoolId") | .OutputValue' \
+            <<<"$outputs")"
+
+          VITE_COGNITO_CLIENT_ID="$(jq -er \
+            '.[] | select(.OutputKey=="UserPoolClientId") | .OutputValue' \
+            <<<"$outputs")"
+
+          {
+            echo "WEBSITE_BUCKET=$WEBSITE_BUCKET"
+            echo "DISTRIBUTION_ID=$DISTRIBUTION_ID"
+            echo "VITE_COGNITO_USER_POOL_ID=$VITE_COGNITO_USER_POOL_ID"
+            echo "VITE_COGNITO_CLIENT_ID=$VITE_COGNITO_CLIENT_ID"
+            echo "VITE_AWS_REGION=$AWS_REGION"
+          } >> "$GITHUB_ENV"
 
       - name: Build production frontend
         working-directory: frontend
