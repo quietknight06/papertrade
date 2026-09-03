@@ -36,12 +36,16 @@ not a broker, exchange, investment adviser, or financial service.
 | Historical data | Tiingo end-of-day API |
 | Machine learning | Python, pandas, NumPy, scikit-learn, joblib |
 
-## Architecture
+## Cloud Architecture
 
 The production AWS architecture and deployment procedure are documented in
 [`AWS_DEPLOYMENT.md`](AWS_DEPLOYMENT.md). It uses CloudFront/S3, Cognito,
 API Gateway, Lambda, DynamoDB, SQS, a small Lightsail Alpaca collector, and a
-scheduled prediction container. The local Express/MongoDB process remains
+scheduled prediction container. 
+### Rationale behind Solutions Architecture
+I am currently a certified AWS Solutions Architect Associate (SAA-C03). I picked this architecture as it was largely serverless,
+which is generally more cost-effective with low traffic (as is the norm with portfolio projects).
+I needed LightSail as a cost-effective client for my Alpaca WebSockets. The local Express/MongoDB process remains
 available for development while the AWS API entry point lives in `backend/api`.
 
 ```text
