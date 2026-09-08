@@ -18,7 +18,9 @@ import DashboardPage from "./dashboard/DashboardPage.jsx";
 function AppRoutes() {
   const { loading, user } = useAuth();
   const location = useLocation();
-  const dashboardRoute = location.pathname.startsWith("/dashboard");
+  const dashboardRoute =
+    location.pathname.startsWith("/dashboard") ||
+    location.pathname.startsWith("/demo");
   if (loading) return <main className="container py-5">Loading account…</main>;
   return (
     <>
@@ -32,6 +34,7 @@ function AppRoutes() {
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/support" element={<Navigate to="/contact" replace />} />
+        <Route path="/demo/*" element={<DashboardPage demoMode />} />
         <Route path="/dashboard/*" element={user ? <DashboardPage /> : <Navigate to="/signup" replace />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

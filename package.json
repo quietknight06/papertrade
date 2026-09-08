@@ -2,7 +2,7 @@
   "name": "papertrade-monorepo-tools",
   "private": true,
   "scripts": {
-    "verify": "npm test --prefix backend && npm run check --prefix collector && npm run lint --prefix frontend && npm run build --prefix frontend && npm run build --prefix infra"
+    "verify": "npm test --prefix backend && npm run check --prefix collector && npm test --prefix frontend && npm run lint --prefix frontend && npm run build --prefix frontend && npm run build --prefix infra"
   },
   "devDependencies": {
     "esbuild": "^0.25.9"

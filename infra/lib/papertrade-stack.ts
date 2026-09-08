@@ -167,6 +167,18 @@ export class PaperTradeStack extends cdk.Stack {
       authorizationType: "NONE",
       target: `integrations/${integration.ref}`,
     });
+    new apigwv2.CfnRoute(this, "PublicQuotesRoute", {
+      apiId: httpApi.ref,
+      routeKey: "GET /api/quotes",
+      authorizationType: "NONE",
+      target: `integrations/${integration.ref}`,
+    });
+    new apigwv2.CfnRoute(this, "PublicAssetsRoute", {
+      apiId: httpApi.ref,
+      routeKey: "GET /api/assets",
+      authorizationType: "NONE",
+      target: `integrations/${integration.ref}`,
+    });
     new apigwv2.CfnRoute(this, "ApiRoute", {
       apiId: httpApi.ref,
       routeKey: "ANY /api/{proxy+}",

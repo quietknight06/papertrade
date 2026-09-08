@@ -28,9 +28,19 @@ test("firstFiniteNumber ignores missing, invalid, zero, and negative values", ()
   assert.equal(_test.firstFiniteNumber(undefined, null), undefined);
 });
 
-test("health is public and all other routes require a JWT subject", async () => {
+test("health and read-only market discovery are public", async () => {
   const health = await handler({ rawPath: "/api/health", requestContext: { http: { method: "GET" } } });
   assert.equal(health.statusCode, 200);
+  const assets = await handler({
+    rawPath: "/api/assets",
+    queryStringParameters: { query: "" },
+    requestContext: { http: { method: "GET" } },
+  });
+  assert.equal(assets.statusCode, 200);
+  assert.deepEqual(JSON.parse(assets.body), []);
+});
+
+test("portfolio routes still require a JWT subject", async () => {
   const protectedResponse = await handler({ rawPath: "/api/account", requestContext: { http: { method: "GET" } } });
   assert.equal(protectedResponse.statusCode, 401);
 });

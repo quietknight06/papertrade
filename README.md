@@ -13,6 +13,7 @@ PaperTrade is a full-stack stock-market simulator for practising trades with sim
 ## Features
 
 - Create and verify an account through Amazon Cognito.
+- Try the complete dashboard without an account using a tab-scoped demo portfolio.
 - Search active, tradable U.S. equities from Alpaca.
 - View Alpaca IEX quotes for default, searched, held, and ordered symbols.
 - Add or withdraw simulated buying power.
@@ -83,11 +84,11 @@ The production application separates browser traffic, transactional state, strea
 
 1. The browser signs up or signs in directly with Cognito through AWS Amplify.
 2. Cognito returns short-lived JWTs; passwords never pass through the application API.
-3. React sends the access token in the `Authorization` header on `/api/*` requests.
+3. React sends the access token in the `Authorization` header on protected `/api/*` requests.
 4. API Gateway validates the token issuer and browser-client audience before invoking protected routes.
 5. The Lambda derives the application user key from the immutable Cognito `sub` claim and reads or updates that user's DynamoDB items.
 
-`GET /api/health` is intentionally public. All account, balance, holding, quote, asset, and order routes require an authenticated subject.
+`GET /api/health`, `GET /api/quotes`, and `GET /api/assets` are intentionally public. Account, balance, holding, and order routes require an authenticated subject. Demo cash, holdings, and orders never call those protected routes: they are stored in the browser tab's `sessionStorage`, cleared by **Exit demo**, and automatically discarded when the tab session ends.
 
 #### Quotes and symbol search
 

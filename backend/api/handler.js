@@ -226,7 +226,9 @@ async function routeRequest(event) {
   const path = event.rawPath || "/";
   if (method === "GET" && path === "/api/health") return response(200, { status: "ok", storage: "dynamodb" });
 
-  const id = userId(event);
+  const publicMarketRoute =
+    method === "GET" && ["/api/quotes", "/api/assets"].includes(path);
+  const id = publicMarketRoute ? null : userId(event);
   if (method === "GET" && path === "/api/me") {
     const profile = await ensureProfile(event);
     return response(200, { id, name: profile.displayName, email: profile.email });

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev.cjs",
     "dev:client": "vite",
+    "test": "node --test src/*.test.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

@@ -15,12 +15,14 @@ function Hero({ animateIntro = false }) {
             Follow live U.S. stock quotes, place simulated orders, track a paper
             portfolio, and explore experimental machine-learning forecasts.
           </p>
-          <Link
-            to="/signup"
-            className="p-2 btn btn-primary fs-5 mb-5"
-          >
-            Sign Up Now
-          </Link>
+          <div className="d-flex justify-content-center gap-3 flex-wrap mb-5">
+            <Link to="/signup" className="p-2 btn btn-primary fs-5">
+              Sign Up Now
+            </Link>
+            <Link to="/demo" className="p-2 btn btn-outline-primary fs-5">
+              Try the Demo
+            </Link>
+          </div>
         </div>
       </div>
     </div>

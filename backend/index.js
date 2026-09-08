@@ -847,7 +847,7 @@ async function getUserHolding(userId, name) {
       );
 }
 
-app.get("/assets", requireAuth, (req, res) => {
+app.get("/assets", (req, res) => {
   const query = String(req.query.query || "")
     .trim()
     .toUpperCase();
@@ -874,7 +874,7 @@ app.get("/assets", requireAuth, (req, res) => {
   return res.json(results);
 });
 
-app.get("/quotes", requireAuth, async (req, res) => {
+app.get("/quotes", async (req, res) => {
   const symbols = requestedQuoteSymbols(req.query.symbols);
   const unsupported = symbols.filter((symbol) => !alpacaAssets.has(symbol));
   if (unsupported.length) {

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { apiRequest, clearSession } from "../api";
 import { useAuth } from "../auth";
+import { clearDemoSession, demoApiRequest } from "../demoSession";
 import "./dashboard.css";
 
 const fallbackWatchlist = [
@@ -32,14 +33,18 @@ const formatForecastDate = (value) =>
     : "Unavailable";
 
 const navItems = [
-  ["/dashboard", "Overview", true],
-  ["/dashboard/orders", "Orders"],
-  ["/dashboard/holdings", "Holdings"],
-  ["/dashboard/positions", "Positions"],
-  ["/dashboard/funds", "Funds"],
+  ["", "Overview", true],
+  ["/orders", "Orders"],
+  ["/holdings", "Holdings"],
+  ["/positions", "Positions"],
+  ["/funds", "Funds"],
 ];
 
+const DashboardRequestContext = createContext(apiRequest);
+const useDashboardRequest = () => useContext(DashboardRequestContext);
+
 function useApiList(path, refreshKey = 0, pollMs = 0) {
+  const request = useDashboardRequest();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -47,7 +52,7 @@ function useApiList(path, refreshKey = 0, pollMs = 0) {
   useEffect(() => {
     let active = true;
     const refresh = () =>
-      apiRequest(path)
+      request(path)
         .then((data) => active && setItems(data))
         .catch((requestError) => active && setError(requestError.message))
         .finally(() => active && setLoading(false));
@@ -57,12 +62,13 @@ function useApiList(path, refreshKey = 0, pollMs = 0) {
       active = false;
       if (timer) clearInterval(timer);
     };
-  }, [path, refreshKey, pollMs]);
+  }, [path, refreshKey, pollMs, request]);
 
   return { items, loading, error };
 }
 
 function useLiveWatchlist(symbols) {
+  const request = useDashboardRequest();
   const [quoteState, setQuoteState] = useState({
     key: defaultQuoteSymbols.join(","),
     items: fallbackWatchlist,
@@ -76,7 +82,7 @@ function useLiveWatchlist(symbols) {
     }
     const requestedSymbols = symbols.join(",");
     const refresh = () =>
-      apiRequest(`/quotes?symbols=${encodeURIComponent(requestedSymbols)}`)
+      request(`/quotes?symbols=${encodeURIComponent(requestedSymbols)}`)
         .then((quotes) => {
           if (!active) return;
           setQuoteState({
@@ -107,7 +113,7 @@ function useLiveWatchlist(symbols) {
       active = false;
       clearInterval(timer);
     };
-  }, [symbols]);
+  }, [symbols, request]);
   const requestedSymbols = symbols.join(",");
   return requestedSymbols && quoteState.key === requestedSymbols
     ? quoteState.items
@@ -115,12 +121,13 @@ function useLiveWatchlist(symbols) {
 }
 
 function usePortfolioWatchlistSymbols() {
+  const request = useDashboardRequest();
   const [symbols, setSymbols] = useState([]);
 
   useEffect(() => {
     let active = true;
     const refresh = () =>
-      apiRequest("/watchlist-symbols")
+      request("/watchlist-symbols")
         .then((nextSymbols) => {
           if (!active) return;
           const normalized = [...new Set(nextSymbols)].sort();
@@ -135,7 +142,7 @@ function usePortfolioWatchlistSymbols() {
       active = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [request]);
 
   return symbols;
 }
@@ -334,14 +341,15 @@ function ExperimentalForecasts() {
   );
 }
 
-function Overview() {
+function Overview({ basePath }) {
+  const request = useDashboardRequest();
   const holdings = useApiList("/allHoldings", 0, 3000);
   const positions = useApiList("/allPositions", 0, 3000);
   const [cash, setCash] = useState(0);
   useEffect(() => {
     let active = true;
     const refresh = () =>
-      apiRequest("/account")
+      request("/account")
         .then((account) => active && setCash(account.cash))
         .catch(() => {});
     refresh();
@@ -350,7 +358,7 @@ function Overview() {
       active = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [request]);
   const invested = holdings.items.reduce(
     (sum, stock) => sum + Number(stock.avg) * Number(stock.qty),
     0,
@@ -373,7 +381,7 @@ function Overview() {
         <article>
           <div className="metric-label-row">
             <span>Available buying power</span>
-            <NavLink to="/dashboard/funds">Manage Funds</NavLink>
+            <NavLink to={`${basePath}/funds`}>Manage Funds</NavLink>
           </div>
           <strong>{formatUSD(cash)}</strong>
           <small>Paper-trading balance</small>
@@ -399,7 +407,7 @@ function Overview() {
               <span className="eyebrow">Today</span>
               <h2>Open positions</h2>
             </div>
-            <NavLink to="/dashboard/positions">View all</NavLink>
+            <NavLink to={`${basePath}/positions`}>View all</NavLink>
           </div>
           <StateMessage
             loading={positions.loading}
@@ -625,13 +633,14 @@ function DashboardList({ title, state, children }) {
 }
 
 function Funds() {
+  const request = useDashboardRequest();
   const [balance, setBalance] = useState(0);
   const [amount, setAmount] = useState("");
   const [message, setMessage] = useState("");
   useEffect(() => {
     let active = true;
     const refresh = () =>
-      apiRequest("/account")
+      request("/account")
         .then((account) => active && setBalance(account.cash))
         .catch((error) => active && setMessage(error.message));
     refresh();
@@ -640,7 +649,7 @@ function Funds() {
       active = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [request]);
   const update = async (direction) => {
     const value = Number(amount);
     if (
@@ -652,7 +661,7 @@ function Funds() {
       return;
     }
     try {
-      const account = await apiRequest("/funds", {
+      const account = await request("/funds", {
         method: "POST",
         body: JSON.stringify({
           amount: value,
@@ -710,6 +719,7 @@ function Funds() {
 }
 
 function Watchlist({ items, onOrder, onSearchSymbolsChange }) {
+  const request = useDashboardRequest();
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -720,7 +730,7 @@ function Watchlist({ items, onOrder, onSearchSymbolsChange }) {
 
     let active = true;
     const timer = setTimeout(() => {
-      apiRequest(
+      request(
         `/assets?query=${encodeURIComponent(normalizedQuery)}&limit=20`,
       )
         .then((assets) => {
@@ -736,7 +746,7 @@ function Watchlist({ items, onOrder, onSearchSymbolsChange }) {
       active = false;
       clearTimeout(timer);
     };
-  }, [query, onSearchSymbolsChange]);
+  }, [query, onSearchSymbolsChange, request]);
 
   return (
     <aside className="watchlist">
@@ -807,6 +817,7 @@ function Watchlist({ items, onOrder, onSearchSymbolsChange }) {
 }
 
 function OrderDialog({ draft, onClose, onPlaced }) {
+  const request = useDashboardRequest();
   const [qty, setQty] = useState(1);
   const [price, setPrice] = useState(
     draft.mode === "BUY"
@@ -820,7 +831,7 @@ function OrderDialog({ draft, onClose, onPlaced }) {
     setSubmitting(true);
     setError("");
     try {
-      await apiRequest("/newOrder", {
+      await request("/newOrder", {
         method: "POST",
         body: JSON.stringify({
           name: draft.stock.name,
@@ -903,9 +914,19 @@ function OrderDialog({ draft, onClose, onPlaced }) {
   );
 }
 
-export default function DashboardPage() {
+export default function DashboardPage({ demoMode = false }) {
+  const request = demoMode ? demoApiRequest : apiRequest;
+  return (
+    <DashboardRequestContext.Provider value={request}>
+      <DashboardShell demoMode={demoMode} />
+    </DashboardRequestContext.Provider>
+  );
+}
+
+function DashboardShell({ demoMode }) {
   const auth = useAuth();
   const navigate = useNavigate();
+  const basePath = demoMode ? "/demo" : "/dashboard";
   const portfolioSymbols = usePortfolioWatchlistSymbols();
   const [searchSymbols, setSearchSymbols] = useState([]);
   const quoteSymbols = useMemo(
@@ -921,14 +942,19 @@ export default function DashboardPage() {
   const watchlist = useLiveWatchlist(quoteSymbols);
   const [draft, setDraft] = useState(null);
   const [ordersVersion, setOrdersVersion] = useState(0);
-  const user = auth.user || {
+  const user = demoMode ? {
     name: "Demo User",
-    email: "demo@papertrade.local",
-  };
+    email: "Session-only portfolio",
+  } : auth.user;
   const logout = async () => {
-    await auth.signOut();
-    clearSession();
-    navigate("/signup");
+    if (demoMode) {
+      clearDemoSession();
+      navigate("/");
+    } else {
+      await auth.signOut();
+      clearSession();
+      navigate("/signup");
+    }
   };
   return (
     <div className="trading-dashboard">
@@ -938,7 +964,7 @@ export default function DashboardPage() {
         </NavLink>
         <nav>
           {navItems.map(([to, label, end]) => (
-            <NavLink key={to} to={to} end={end}>
+            <NavLink key={to} to={`${basePath}${to}`} end={end}>
               {label}
             </NavLink>
           ))}
@@ -950,10 +976,20 @@ export default function DashboardPage() {
             <small>{user.email}</small>
           </div>
           <button type="button" onClick={logout}>
-            Sign out
+            {demoMode ? "Exit demo" : "Sign out"}
           </button>
         </div>
       </header>
+      {demoMode && (
+        <div className="demo-banner" role="status">
+          <strong>Demo mode</strong>
+          <span>
+            Trades and fund changes are saved only in this browser tab and are
+            erased when the session ends.
+          </span>
+          <NavLink to="/signup">Create an account</NavLink>
+        </div>
+      )}
       <div className="dash-body">
         <Watchlist
           items={watchlist}
@@ -962,7 +998,7 @@ export default function DashboardPage() {
         />
         <main className="dash-content">
           <Routes>
-            <Route index element={<Overview />} />
+            <Route index element={<Overview basePath={basePath} />} />
             <Route
               path="orders"
               element={<Orders refreshKey={ordersVersion} />}
@@ -980,7 +1016,7 @@ export default function DashboardPage() {
           onPlaced={() => {
             setDraft(null);
             setOrdersVersion((value) => value + 1);
-            navigate("/dashboard/orders");
+            navigate(`${basePath}/orders`);
           }}
         />
       )}

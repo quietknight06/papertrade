@@ -30,6 +30,7 @@ function Navbar() {
             <ul className="navbar-nav mb-lg-0">
               {[
                 ["/dashboard", "Dashboard"],
+                ["/demo", "Try Demo"],
                 ["/about", "About"],
                 ["/products", "Products"],
                 ["/pricing", "Pricing"],

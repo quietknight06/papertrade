@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../auth";
 import { apiRequest } from "../../api";
 
@@ -162,6 +163,15 @@ function Signup() {
               ? "Already have an account? Sign in"
               : "Need an account? Sign up"}
           </button>
+          <div className="mt-3 pt-3 border-top">
+            <p className="mb-2 text-muted">
+              Want to explore first? Demo trades and funds last only for this
+              browser tab.
+            </p>
+            <Link className="btn btn-outline-primary" to="/demo">
+              Try dashboard demo
+            </Link>
+          </div>
         </div>
       </div>
     </main>
