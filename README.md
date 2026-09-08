@@ -15,6 +15,7 @@ PaperTrade is a full-stack stock-market simulator for practising trades with sim
 - Create and verify an account through Amazon Cognito.
 - Try the complete dashboard without an account using a tab-scoped demo portfolio.
 - Search active, tradable U.S. equities from Alpaca.
+- See ranked search matches separately from a dedicated current-holdings list.
 - View Alpaca IEX quotes for default, searched, held, and ordered symbols.
 - Add or withdraw simulated buying power.
 - Submit simulated whole-share limit buy and sell orders.

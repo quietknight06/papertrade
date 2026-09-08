@@ -3,6 +3,7 @@ import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { apiRequest, clearSession } from "../api";
 import { useAuth } from "../auth";
 import { clearDemoSession, demoApiRequest } from "../demoSession";
+import { rankStockMatches } from "../stockSearch";
 import "./dashboard.css";
 
 const fallbackWatchlist = [
@@ -120,17 +121,19 @@ function useLiveWatchlist(symbols) {
     : [];
 }
 
-function usePortfolioWatchlistSymbols() {
+function useHoldingSymbols() {
   const request = useDashboardRequest();
   const [symbols, setSymbols] = useState([]);
 
   useEffect(() => {
     let active = true;
     const refresh = () =>
-      request("/watchlist-symbols")
-        .then((nextSymbols) => {
+      request("/allHoldings")
+        .then((holdings) => {
           if (!active) return;
-          const normalized = [...new Set(nextSymbols)].sort();
+          const normalized = [
+            ...new Set(holdings.map((holding) => holding.name)),
+          ].sort();
           setSymbols((current) =>
             current.join(",") === normalized.join(",") ? current : normalized,
           );
@@ -718,7 +721,57 @@ function Funds() {
   );
 }
 
-function Watchlist({ items, onOrder, onSearchSymbolsChange }) {
+function StockRows({ items, emptyMessage, onOrder }) {
+  if (!items.length) return <p className="watch-message">{emptyMessage}</p>;
+  return items.map((stock) => (
+    <article key={stock.name}>
+      <div>
+        <strong>{stock.name}</strong>
+        {stock.companyName && stock.companyName !== stock.name && (
+          <span className="stock-company" title={stock.companyName}>
+            {stock.companyName}
+          </span>
+        )}
+        <small className={stock.isDown ? "negative" : "positive"}>
+          {stock.percent}
+        </small>
+      </div>
+      <span
+        title={
+          stock.source === "alpaca" ? "Live Alpaca IEX quote" : "Fallback quote"
+        }
+      >
+        {Number.isFinite(stock.price) ? formatUSD(stock.price) : "—"}
+      </span>
+      <div className="watch-actions">
+        <button
+          type="button"
+          disabled={!Number.isFinite(stock.price)}
+          onClick={() => onOrder(stock, "BUY")}
+        >
+          Buy
+        </button>
+        <button
+          type="button"
+          className="sell"
+          disabled={!Number.isFinite(stock.price)}
+          onClick={() => onOrder(stock, "SELL")}
+        >
+          Sell
+        </button>
+      </div>
+    </article>
+  ));
+}
+
+function Watchlist({
+  featuredItems,
+  holdingItems,
+  searchItems,
+  searchResultCount,
+  onOrder,
+  onSearchSymbolsChange,
+}) {
   const request = useDashboardRequest();
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -735,9 +788,10 @@ function Watchlist({ items, onOrder, onSearchSymbolsChange }) {
       )
         .then((assets) => {
           if (!active) return;
-          onSearchSymbolsChange(assets.map((asset) => asset.symbol));
+          const rankedAssets = rankStockMatches(assets, normalizedQuery);
+          onSearchSymbolsChange(rankedAssets.map((asset) => asset.symbol));
           if (!assets.length)
-            setSearchError("No additional tradable stocks found.");
+            setSearchError("No tradable stocks match that search.");
         })
         .catch((error) => active && setSearchError(error.message))
         .finally(() => active && setSearching(false));
@@ -747,6 +801,15 @@ function Watchlist({ items, onOrder, onSearchSymbolsChange }) {
       clearTimeout(timer);
     };
   }, [query, onSearchSymbolsChange, request]);
+
+  const hasQuery = Boolean(query.trim());
+  const discoveryItems = hasQuery ? searchItems : featuredItems;
+  const waitingForQuotes =
+    hasQuery &&
+    !searchError &&
+    !searching &&
+    searchItems.length < searchResultCount;
+  const loadingDiscovery = searching || waitingForQuotes;
 
   return (
     <aside className="watchlist">
@@ -763,55 +826,52 @@ function Watchlist({ items, onOrder, onSearchSymbolsChange }) {
           }}
           placeholder="Search ticker or company"
         />
-        <b>{searching ? "…" : items.length}</b>
+        <b>{loadingDiscovery ? "…" : discoveryItems.length}</b>
       </label>
-      <div className="watch-items">
-        {searchError && <p className="watch-message">{searchError}</p>}
-        {!searchError && !searching && items.length === 0 && (
-          <p className="watch-message">No tradable stocks found.</p>
-        )}
-        {items.map((stock) => (
-          <article key={stock.name}>
-            <div>
-              <strong>{stock.name}</strong>
-              {stock.companyName && stock.companyName !== stock.name && (
-                <span className="stock-company" title={stock.companyName}>
-                  {stock.companyName}
-                </span>
-              )}
-              <small className={stock.isDown ? "negative" : "positive"}>
-                {stock.percent}
-              </small>
-            </div>
-            <span
-              title={
-                stock.source === "alpaca"
-                  ? "Live Alpaca IEX quote"
-                  : "Fallback quote"
-              }
-            >
-              {Number.isFinite(stock.price) ? formatUSD(stock.price) : "—"}
-            </span>
-            <div className="watch-actions">
-              <button
-                type="button"
-                disabled={!Number.isFinite(stock.price)}
-                onClick={() => onOrder(stock, "BUY")}
-              >
-                Buy
-              </button>
-              <button
-                type="button"
-                className="sell"
-                disabled={!Number.isFinite(stock.price)}
-                onClick={() => onOrder(stock, "SELL")}
-              >
-                Sell
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
+      <section
+        className="watch-zone holdings-zone"
+        aria-labelledby="holdings-zone-title"
+      >
+        <div className="watch-zone-heading">
+          <strong id="holdings-zone-title">Current holdings</strong>
+          <span>{holdingItems.length}</span>
+        </div>
+        <div className="watch-items">
+          <StockRows
+            items={holdingItems}
+            emptyMessage="Buy a stock to see it here."
+            onOrder={onOrder}
+          />
+        </div>
+      </section>
+      <section
+        className="watch-zone discovery-zone"
+        aria-labelledby="discovery-zone-title"
+      >
+        <div className="watch-zone-heading">
+          <strong id="discovery-zone-title">
+            {hasQuery ? "Best matches" : "Market watch"}
+          </strong>
+          <span>
+            {loadingDiscovery
+              ? "Searching…"
+              : `${discoveryItems.length} stocks`}
+          </span>
+        </div>
+        <div className="watch-items">
+          {searchError ? (
+            <p className="watch-message">{searchError}</p>
+          ) : loadingDiscovery ? (
+            <p className="watch-message">Finding the best matches…</p>
+          ) : (
+            <StockRows
+              items={discoveryItems}
+              emptyMessage="No tradable stocks found."
+              onOrder={onOrder}
+            />
+          )}
+        </div>
+      </section>
     </aside>
   );
 }
@@ -927,19 +987,25 @@ function DashboardShell({ demoMode }) {
   const auth = useAuth();
   const navigate = useNavigate();
   const basePath = demoMode ? "/demo" : "/dashboard";
-  const portfolioSymbols = usePortfolioWatchlistSymbols();
+  const holdingSymbols = useHoldingSymbols();
   const [searchSymbols, setSearchSymbols] = useState([]);
   const quoteSymbols = useMemo(
     () => [
       ...new Set([
-        ...defaultQuoteSymbols,
-        ...portfolioSymbols,
         ...searchSymbols,
+        ...holdingSymbols,
+        ...defaultQuoteSymbols,
       ]),
     ],
-    [portfolioSymbols, searchSymbols],
+    [holdingSymbols, searchSymbols],
   );
   const watchlist = useLiveWatchlist(quoteSymbols);
+  const quotesBySymbol = useMemo(
+    () => new Map(watchlist.map((stock) => [stock.name, stock])),
+    [watchlist],
+  );
+  const itemsForSymbols = (symbols) =>
+    symbols.map((symbol) => quotesBySymbol.get(symbol)).filter(Boolean);
   const [draft, setDraft] = useState(null);
   const [ordersVersion, setOrdersVersion] = useState(0);
   const user = demoMode ? {
@@ -992,7 +1058,10 @@ function DashboardShell({ demoMode }) {
       )}
       <div className="dash-body">
         <Watchlist
-          items={watchlist}
+          featuredItems={itemsForSymbols(defaultQuoteSymbols)}
+          holdingItems={itemsForSymbols(holdingSymbols)}
+          searchItems={itemsForSymbols(searchSymbols)}
+          searchResultCount={searchSymbols.length}
           onSearchSymbolsChange={setSearchSymbols}
           onOrder={(stock, mode) => setDraft({ stock, mode })}
         />

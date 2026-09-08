@@ -828,7 +828,18 @@ function requestedQuoteSymbols(value) {
         .map((symbol) => symbol.trim().toUpperCase())
         .filter(Boolean),
     ),
-  ].slice(0, 25);
+  ].slice(0, 50);
+}
+
+function assetSearchRank(asset, query) {
+  const symbol = String(asset.symbol || "").toUpperCase();
+  const name = String(asset.name || "").toUpperCase();
+  if (symbol === query) return 0;
+  if (symbol.startsWith(query)) return 1;
+  if (name.startsWith(query)) return 2;
+  if (symbol.includes(query)) return 3;
+  if (name.includes(query)) return 4;
+  return 5;
 }
 
 async function refreshRequestedQuotes(symbols) {
@@ -866,8 +877,8 @@ app.get("/assets", (req, res) => {
         asset.symbol.includes(query) || asset.name.toUpperCase().includes(query),
     )
     .sort((left, right) => {
-      const leftRank = left.symbol === query ? 0 : left.symbol.startsWith(query) ? 1 : 2;
-      const rightRank = right.symbol === query ? 0 : right.symbol.startsWith(query) ? 1 : 2;
+      const leftRank = assetSearchRank(left, query);
+      const rightRank = assetSearchRank(right, query);
       return leftRank - rightRank || left.symbol.localeCompare(right.symbol);
     })
     .slice(0, limit);
