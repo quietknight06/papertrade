@@ -52,6 +52,12 @@
 
 body {
   margin: 0;
+  overflow-x: hidden;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
 }
 
 #root {
@@ -114,4 +120,85 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+/* Marketing pages use fixed Bootstrap `col-*` classes. Preserve the desktop
+   composition and switch to a single, readable column only on small screens. */
+@media (max-width: 991.98px) {
+  .navbar .container {
+    padding-inline: 1rem;
+  }
+
+  .navbar-brand {
+    max-width: 180px;
+  }
+
+  .navbar-brand img {
+    width: 100% !important;
+  }
+
+  .navbar-collapse {
+    padding-block: 0.5rem;
+  }
+
+  .navbar-nav .nav-link {
+    padding-block: 0.65rem;
+  }
+
+  .container {
+    max-width: 100%;
+  }
+
+  .site-footer .container {
+    padding-inline: 1.25rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .container {
+    padding-inline: 1rem;
+  }
+
+  .container.p-5,
+  .container-fluid .p-5,
+  .row.p-5 {
+    padding: 2rem 1rem !important;
+  }
+
+  .container > .row > .col-6,
+  .container > .row > .col-4,
+  .container > .row > .col-8,
+  .container > .row > .col-2,
+  #supportHero > .row > .col-6 {
+    flex: 0 0 100%;
+    width: 100%;
+  }
+
+  .container > .row > .col-6.p-5,
+  .container > .row > .col-4.p-4,
+  .container > .row > .col-8.p-4,
+  #supportHero > .row > .col-6.p-3 {
+    padding: 1.25rem !important;
+  }
+
+  .home-hero-copy .btn,
+  .container .btn[style*="width"] {
+    width: min(100%, 300px) !important;
+  }
+
+  .site-footer .row {
+    gap: 1.5rem;
+  }
+
+  .site-footer .col {
+    flex: 0 0 100%;
+  }
+
+  .site-footer img {
+    width: min(220px, 70%) !important;
+  }
+
+  h1 {
+    overflow-wrap: anywhere;
+  }
 }
